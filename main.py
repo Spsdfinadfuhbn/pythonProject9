@@ -1,10 +1,13 @@
 import asyncio
 import time
 import config
+import datetime as dt
+import matplotlib.dates as mdates
 from datetime import date, timedelta
 from unittest.mock import call
-
+import matplotlib.pyplot as plt
 import dp
+import numpy as numpy
 import telebot
 from aiogram.client import *
 from aiogram.client import bot
@@ -19,24 +22,9 @@ import logging
 import requests
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-
-@dp.message(content_types=['text'])  #реагирует на любые сообщения
-def test(message):
-     if message.text == 'One':    #Если содержимое == 'One',то
-          bot.reply_to(message, 'Введите текст')   #Bot reply 'Введите текст'
-          @bot.message_handler(content_types=['text'])  #Создаём новую функцию ,реагирующую на любое сообщение
-          def message_input_step(message):
-               global text  #объявляем глобальную переменную
-               text = message.text
-               bot.reply_to(message, f'Ваш текст: {message.text}')
-          bot.register_next_step_handler(message, message_input_step) #добавляем следующий шаг, перенаправляющий пользователя на message_input_step
-
-
 TOKEN = "6613970622:AAHdXz77HCjmA6ybSHCcgAl_JXLWLedrXYA"
-updater = Updater(token=TOKEN, use_context=True)
-dispatcher = updater.dispatcher
+bot = Bot(token=TOKEN)
 dp = Dispatcher()
-bot = Bot(token="6613970622:AAHdXz77HCjmA6ybSHCcgAl_JXLWLedrXYA")
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -61,7 +49,8 @@ async def send_price(message: types.Message):
 
 @dp.message(F.text.lower() == "цена акции amazon")
 async def send_price_amazon(message: types.Message):
-    await message.reply(str(get_data("AMZN")))
+    reply = '$' + str(get_data("AMZN"))
+    await message.reply(reply)
 
 
 @dp.message(F.text.lower() == "цена акции google")
@@ -78,6 +67,7 @@ async def cmd_feedback(message: types.Message):
         [types.KeyboardButton(text="4")],
         [types.KeyboardButton(text="5")],
         [types.KeyboardButton(text="посмотреть оценки бота")],
+        [types.KeyboardButton(text="посмотреть отзывы бота")],
         [types.KeyboardButton(text="оставить отзыв в виде сообшения")],
         [types.KeyboardButton(text="назад")]
     ]
@@ -142,6 +132,14 @@ async def send_assessments(message: types.Message):
         await message.answer(counter)
 
 
+@dp.message(F.text.lower() == 'посмотреть отзывы бота')
+async def send_assessments(message: types.Message):
+    await message.answer('вот отзывы, которые написали пользователи :')
+    with open("marks.txt", "r") as f:
+        counter = f.read()
+        await message.answer(counter)
+
+
 @dp.message(F.text.lower() == 'назад')
 async def send_asse(message: types.Message):
     await cmd_start(message)
@@ -150,8 +148,12 @@ async def send_asse(message: types.Message):
 @dp.message(F.text.lower() == 'оставить отзыв в виде сообшения')
 async def send_write_message(message: types.Message):
     today = date.today() - timedelta(days=1)
-    with open("reviews.txt", "a") as f:
-        f.write(f"{today}\n")
+
+    @dp.message()  # реагирует на любые сообщения
+    def test(message):
+        with open("marks.txt", "a", encoding="utf-8") as f:
+            print(type(message.text))
+            f.write("{} {}\n".format(today, message.text))
 
 
 apiKey = "Kw01MECyf6902xX3s5plA1cPEwS0pQIe"
@@ -159,19 +161,44 @@ apiKey = "Kw01MECyf6902xX3s5plA1cPEwS0pQIe"
 
 def get_data(ticker):
     today = date.today() - timedelta(days=1)
+    print(today)
+
     res = requests.get(
         f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{today}/{today}?adjusted=true&sort=asc&limit=120&apiKey={apiKey}")
     data = res.json()
     data_json = data['results'][0]['h']
     with open('response.json', 'w') as f:
         f.write(str(data))
-    print(res)
     return data_json
 
 
-async def main():
-    await dp.start_polling(bot)
+def get_data2_0(ticker):
+    today = date.today() - timedelta(days=1)
+    week_ago = date.today() - timedelta(days=8)
+    dates = []
+    for i in range(1, 9):
+        dates.append(str(date.today() - timedelta(days=i)))
+    print(today)
+    res = requests.get(
+        f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{week_ago}/{today}?adjusted=true&sort=asc&limit=120&apiKey={apiKey}")
+    data = res.json()
+    data_json = []
+    for i in range(0, len(data['results'])):
+        data_json.append(data['results'][i]['h'])
+    plot_data = numpy.array(data_json)
+    plt.plot(numpy.arange(0,5,1), plot_data)
+    plt.xlabel(f"{today};{week_ago}")
+    plt.show()
+    with open('response.json', 'w') as f:
+        f.write(str(data))
+    return plot_data
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+print(get_data2_0('GOOG'))
+#
+# async def main():
+#     await dp.start_polling(bot)
+#
+#
+# if __name__ == "__main__":
+#     asyncio.run(main())
