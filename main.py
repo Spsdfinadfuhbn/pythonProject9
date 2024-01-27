@@ -1,26 +1,17 @@
 import asyncio
-import time
-import config
-import datetime as dt
-import matplotlib.dates as mdates
+from aiogram.types import FSInputFile
 from datetime import date, timedelta
-from unittest.mock import call
 import matplotlib.pyplot as plt
 import dp
 import numpy as numpy
-import telebot
-from aiogram.client import *
 from aiogram.client import bot
 from telebot import types
 from aiogram import *
 from aiogram.filters.command import Command
-from telebot.asyncio_helper import get_chat
-from telegram import InlineQueryResultArticle, InputTextMessageContent
-from telegram.ext import Updater, CommandHandler
-from telegram.ext import MessageHandler, Filters, InlineQueryHandler
 import logging
+import os
 import requests
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 
 TOKEN = "6613970622:AAHdXz77HCjmA6ybSHCcgAl_JXLWLedrXYA"
 bot = Bot(token=TOKEN)
@@ -31,31 +22,47 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    user_id = message.from_user.id
     kb = [
         [types.KeyboardButton(text="цена акции apple")],
         [types.KeyboardButton(text="цена акции google")],
         [types.KeyboardButton(text="цена акции amazon")],
         [types.KeyboardButton(text="поставить оценку")]
-
     ]
     keyboard = types.ReplyKeyboardMarkup(keyboard=kb)
     await message.answer("Что надо?", reply_markup=keyboard)
+    with open("id.txt","a") as f:
+        f.write(f"{user_id}\n")
+
 
 
 @dp.message(F.text.lower() == "цена акции apple")
 async def send_price(message: types.Message):
+    today = date.today() - timedelta(days=1)
+    if not os.path.exists(f"AAPL{today}.png"):
+        create_graphicks('AAPL')
+    photo = FSInputFile(path="AAPL.png")
+    await bot.send_photo(chat_id=message.chat.id,photo=photo)
     await message.reply(str(get_data("AAPL")))
+
 
 
 @dp.message(F.text.lower() == "цена акции amazon")
 async def send_price_amazon(message: types.Message):
-    reply = '$' + str(get_data("AMZN"))
-    await message.reply(reply)
+    create_graphicks('AMZN')
+    photo = FSInputFile(path="AMZN.png")
+    await bot.send_photo(chat_id=message.chat.id, photo=photo)
+    await message.reply(str(get_data("AMZN")))
+
 
 
 @dp.message(F.text.lower() == "цена акции google")
 async def send_price_google(message: types.Message):
+    create_graphicks('GOOG')
+    photo = FSInputFile(path="GOOG.png")
+    await bot.send_photo(chat_id=message.chat.id, photo=photo)
     await message.reply(str(get_data("GOOG")))
+
 
 
 @dp.message(F.text.lower() == "поставить оценку")
@@ -145,9 +152,11 @@ async def send_asse(message: types.Message):
     await cmd_start(message)
 
 
+
 @dp.message(F.text.lower() == 'оставить отзыв в виде сообшения')
 async def send_write_message(message: types.Message):
     today = date.today() - timedelta(days=1)
+    await steal(message)
 
     @dp.message()  # реагирует на любые сообщения
     def test(message):
@@ -156,13 +165,13 @@ async def send_write_message(message: types.Message):
             f.write("{} {}\n".format(today, message.text))
 
 
+
 apiKey = "Kw01MECyf6902xX3s5plA1cPEwS0pQIe"
 
 
 def get_data(ticker):
     today = date.today() - timedelta(days=1)
     print(today)
-
     res = requests.get(
         f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{today}/{today}?adjusted=true&sort=asc&limit=120&apiKey={apiKey}")
     data = res.json()
@@ -174,7 +183,7 @@ def get_data(ticker):
 
 def get_data2_0(ticker):
     today = date.today() - timedelta(days=1)
-    week_ago = date.today() - timedelta(days=8)
+    week_ago = date.today() - timedelta(days=7)
     dates = []
     for i in range(1, 9):
         dates.append(str(date.today() - timedelta(days=i)))
@@ -185,20 +194,34 @@ def get_data2_0(ticker):
     data_json = []
     for i in range(0, len(data['results'])):
         data_json.append(data['results'][i]['h'])
+    with open('response.json', 'w') as f:
+        f.write(str(data))
+    return data_json
+
+def create_graphicks(ticker):
+    today = date.today() - timedelta(days=1)
+    yesterday = date.today() - timedelta(days=2)
+    week_ago = date.today() - timedelta(days=7)
+    if os.path.exists(f"{ticker}{yesterday}.png"):
+        os.remove(f"{ticker}{yesterday}.png")
+    data_json = get_data2_0(ticker)
     plot_data = numpy.array(data_json)
     plt.plot(numpy.arange(0,5,1), plot_data)
     plt.xlabel(f"{today};{week_ago}")
-    plt.show()
-    with open('response.json', 'w') as f:
-        f.write(str(data))
+    plt.savefig(f"{ticker}{today}.png")
+    plt.clf()
     return plot_data
 
 
-print(get_data2_0('GOOG'))
-#
-# async def main():
-#     await dp.start_polling(bot)
-#
-#
-# if __name__ == "__main__":
-#     asyncio.run(main())
+@dp.message()
+async def steal(message: types.Message):
+    s=open('messages.txt', 'a', encoding="utf-8")
+    s.write(f"{message.from_user.username}   -   message is   {message.text}\n")
+
+
+async def main():
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+ asyncio.run(main())
