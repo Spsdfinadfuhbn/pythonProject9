@@ -13,7 +13,7 @@ import os
 import requests
 
 
-TOKEN = "6613970622:AAHdXz77HCjmA6ybSHCcgAl_JXLWLedrXYA"
+TOKEN = ""
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
